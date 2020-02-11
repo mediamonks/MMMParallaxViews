@@ -37,6 +37,9 @@ public class ParallaxViewCoordinator {
 	/// The parallaxViews to animate
 	public var parallaxViews: [ParallaxView] {
 		set {
+			_parallaxViews.forEach { $0.value?.removeFromSuperview() }
+			constraintsById = [:]
+			
 			var currentIDs: [ObjectIdentifier] = []
 
 			_parallaxViews = newValue.map { view in
@@ -63,9 +66,10 @@ public class ParallaxViewCoordinator {
 	private var constraintsById: [ObjectIdentifier: ConstraintSet] = [:]
 	private var observer: NSKeyValueObservation?
 	
-	convenience init(scrollView: UIScrollView, parallaxViews: [ParallaxView]) {
+	convenience init(scrollView: UIScrollView, containerView: UIView, parallaxViews: [ParallaxView]) {
 		self.init()
 		self.scrollView = scrollView
+		self.containerView = containerView
 		self.parallaxViews = parallaxViews
 	}
 	

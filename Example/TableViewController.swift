@@ -63,15 +63,15 @@ class TableViewController: UIViewController {
 		
 		view.addSubview(tableView)
 		
-		let viewDict = ["wrapper": tableView]
+		let viewDict = ["tableView": tableView]
 		
 		NSLayoutConstraint.activate(
 			NSLayoutConstraint.constraints(
-				withVisualFormat: "V:|[wrapper]|",
+				withVisualFormat: "V:|[tableView]|",
 				options: [], metrics: nil,
 				views: viewDict
 			) + NSLayoutConstraint.constraints(
-				withVisualFormat: "H:|[wrapper]|",
+				withVisualFormat: "H:|[tableView]|",
 				options: [], metrics: nil,
 				views: viewDict
 			)
@@ -94,8 +94,6 @@ class TableViewController: UIViewController {
 		coordinator.parallaxViews = [header, center, footer]
 		coordinator.containerView = self.view
 	}
-	
-	
 }
 
 extension TableViewController: UITableViewDelegate, UITableViewDataSource {
