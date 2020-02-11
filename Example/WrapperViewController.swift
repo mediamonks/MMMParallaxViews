@@ -22,13 +22,13 @@ class WrapperViewController: UIViewController {
 		override init(frame: CGRect) {
 			super.init(frame: frame)
 			
-			backgroundColor = .red
+			backgroundColor = .systemPink
 		}
 		
 		required init?(coder: NSCoder) {
 			super.init(coder: coder)
 			
-			backgroundColor = .red
+			backgroundColor = .systemPink
 		}
 	}
 	
@@ -40,7 +40,7 @@ class WrapperViewController: UIViewController {
 	override func viewDidLoad() {
 		super.viewDidLoad()
 		
-		footer.backgroundColor = .blue
+		footer.backgroundColor = .yellow
 		footer.options.type = .scrollView(y: 2000 - 120)
 		footer.options.height = .init(min: 44, max: 120)
 		
@@ -49,9 +49,9 @@ class WrapperViewController: UIViewController {
 		center.options.height = .init(min: 40, max: 40)
 		center.options.stickPosition = .none
 		
-		scrollView.showsVerticalScrollIndicator = true
+		scrollView.showsVerticalScrollIndicator = false
 		scrollView.contentSize = .init(width: view.frame.size.width, height: 2000)
-		scrollView.backgroundColor = .gray
+		scrollView.backgroundColor = .white
 		
 		let wrapper = ParallaxViewWrapper(scrollView: scrollView, parallaxViews: [header, center, footer])
 		wrapper.translatesAutoresizingMaskIntoConstraints = false

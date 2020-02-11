@@ -22,13 +22,13 @@ class ScrollViewController: UIViewController {
 		override init(frame: CGRect) {
 			super.init(frame: frame)
 			
-			backgroundColor = .red
+			backgroundColor = .orange
 		}
 		
 		required init?(coder: NSCoder) {
 			super.init(coder: coder)
 			
-			backgroundColor = .red
+			backgroundColor = .orange
 		}
 	}
 	
@@ -77,7 +77,7 @@ class ScrollViewController: UIViewController {
 			)
 		)
 		
-		footer.backgroundColor = .blue
+		footer.backgroundColor = .purple
 		footer.options.type = .scrollView(y: 2000 - 120)
 		footer.options.height = .init(min: 44, max: 120)
 		
@@ -86,7 +86,7 @@ class ScrollViewController: UIViewController {
 		center.options.height = .init(min: 40, max: 40)
 		center.options.stickPosition = .none
 		
-		scrollView.showsVerticalScrollIndicator = true
+		scrollView.showsVerticalScrollIndicator = false
 		scrollView.contentSize = .init(width: view.frame.size.width, height: 2000)
 		scrollView.backgroundColor = .gray
 		
