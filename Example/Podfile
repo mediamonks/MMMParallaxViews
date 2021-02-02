@@ -1,0 +1,3 @@
+target 'MMMParallaxViewsExample' do
+  pod 'MMMParallaxViews', :path => '..'
+end
