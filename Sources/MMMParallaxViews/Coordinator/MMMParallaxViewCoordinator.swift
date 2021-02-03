@@ -9,58 +9,95 @@ public class MMMParallaxViewCoordinator {
 
 	private class ParallaxViewStorage {
 
-		public private(set) weak var view: MMMParallaxView?
+		public private(set) weak var descriptor: MMMParallaxView?
+
+		public private(set) weak var view: UIView?
 		
 		public var topConstraint: NSLayoutConstraint?
 		public var heightConstraint: NSLayoutConstraint?
 		
-		init(_ view: MMMParallaxView?) {
-			self.view = view
+		init(_ descriptor: MMMParallaxView) {
+			self.descriptor = descriptor
+			self.view = descriptor.parallaxView
+		}
+
+		public func minHeight(width: CGFloat, verticalFittingPriority: UILayoutPriority) -> CGFloat {
+
+			guard let descriptor = descriptor, let view = view else {
+				assertionFailure()
+				return 0
+			}
+
+			switch descriptor.options.height {
+			case let .fixed(min, _):
+				return min
+			case .dynamic:
+				heightConstraint?.isActive = false
+				let min = view.systemLayoutSizeFitting(
+					CGSize(width: width, height: 0),
+					withHorizontalFittingPriority: .required,
+					verticalFittingPriority: verticalFittingPriority
+				).height.rounded(.up)
+				heightConstraint?.isActive = true
+				return min
+			}
+		}
+
+		public func maxHeight(width: CGFloat) -> CGFloat {
+
+			guard let descriptor = descriptor, let view = view else {
+				assertionFailure()
+				return 0
+			}
+
+			switch descriptor.options.height {
+			case let .fixed(_, max):
+				return max
+			case .dynamic:
+				heightConstraint?.isActive = false
+				let max = view.systemLayoutSizeFitting(
+					CGSize(width: width, height: 0),
+					withHorizontalFittingPriority: .required,
+					verticalFittingPriority: .fittingSizeLevel
+				).height.rounded(.up)
+				heightConstraint?.isActive = true
+				return max
+			}
 		}
 	}
 
-	/// The ScrollView or TableView to attach to.
+	/// The scroll or table view to coordinate "parallax views" for.
 	public weak var scrollView: UIScrollView? {
 		didSet {
-			self.setUpListener()
-			self.setUpViews()
+			setUpListener()
+			setUpViews()
 		}
 	}
 	
 	/// The `UIView` to add the `parallaxViews` to, usually the parentView of your `scrollView`.
 	public weak var containerView: UIView? {
 		didSet {
-			self.setUpViews()
+			setUpViews()
 		}
 	}
 
-	/// If the Coordinator should adjust the `contentInset` of the scrollView to adjust for views
-	/// sticking on top, this overrides your `contentInsets` so use with caution.
+	/// `true` if the receiver should adjust `contentInsets` of the table or scroll view to compensate
+	/// for the views sticking to the top or bottom. `false` by default.
 	///
-	/// Say you have `UITableView` section titles, and a `ParallaxView` sticking to the top
-	/// of the frame. By default the section titles will appear behind the `ParallaxView`. When
-	/// setting this to true, we adjust the contentInsets of the `UITableView/UIScrollView` to
-	/// the height of the `ParallaxView` so the section titles will stick to the bottom of the
-	/// `ParallaxView`. As mentioned before, this will override any custom `contentInset` you have
-	/// set. If you use custom `contentInsets`, calculate the insets by using the `topContentInset`
-	/// and `bottomContentInset` instead.
+	/// Let say your `UITableView` has section titles and a "parallax view" sticking to the top.
+	/// By default the titles are going to appear behind the parallax view because the table view is unaware
+	/// of the parallax view overlapping it. When this flag is set to `true` however, the the coordinator
+	/// is going to adjust `contentInsets` so the titles will stick to the bottom of the parallax view.
 	///
-	/// Defaults to `false`.
+	/// If you are adjusting `contentInsets` yourself, then you might want to take `topContentInset`
+	/// and `bottomContentInset` into account.
 	public var shouldAdjustContentInset: Bool = false
 
-	/// The calculated top `contentInset`, calculated by getting the maximum 'min' height of the
-	/// topmost view.
-	///
-	/// More info on this behaviour is documented at `shouldAdjustContentInset`.
 	public private(set) var topContentInset: CGFloat = 0
 	
-	/// The calculated bottom `contentInset`, calculated by getting the maximum 'min' height of the
-	/// bottommost view.
-	///
-	/// More info on this behaviour is documented at `shouldAdjustContentInset`.
 	public private(set) var bottomContentInset: CGFloat = 0
 
-	/// The priority that should be given to the height constraint, defaults to `.defaultHigh + 1` (751).
+	/// The priority of the parallax view height constraint. By default `.defaultHigh + 1` (751).
 	/// Set this before assigning your `parallaxViews`.
 	public var heightConstraintPriority: UILayoutPriority = .defaultHigh + 1
 
@@ -80,25 +117,24 @@ public class MMMParallaxViewCoordinator {
 	/// like a pull-to-refresh control, then it can be useful to disable the stretching.
 	public var stretchTopViewWhenBouncing: Bool = true
 
-	/// Same as `stretchTopViewWhenBouncing` but for the paralax view tracking the bottom of the content.
+	/// Same as `stretchTopViewWhenBouncing` but for the parallax view tracking the bottom of the content.
 	public var stretchBottomViewWhenBouncing: Bool = true
 	
-	/// If the ParallaxViews should stick to the `safeAreaInsets`. Defaults to `true`.
+	/// `true` if `safeAreaInsets` of the container should be taken into account when sticking the parallax views.
+	/// (`true` by default.)
 	public var stickToSafeAreaInsets: Bool = true
 	
 	private var _parallaxViews: [ParallaxViewStorage] = []
 
-	/// The parallaxViews to animate, these views will be placed in the `containerView` by the coordinator
-	/// and animated according to the current scroll position.
+	/// The "parallax views" that should be managed by the coordinator.
 	public var parallaxViews: [MMMParallaxView] {
 		set {
 			_parallaxViews.forEach { $0.view?.removeFromSuperview() }
 			_parallaxViews = newValue.map { ParallaxViewStorage($0) }
-			
-			self.setUpViews()
+			setUpViews()
 		}
 		get {
-			return _parallaxViews.compactMap { $0.view }
+			return _parallaxViews.compactMap { $0.descriptor }
 		}
 	}
 	
@@ -118,7 +154,7 @@ public class MMMParallaxViewCoordinator {
 	}
 	
 	deinit {
-		self.tearDownListener()
+		tearDownListener()
 	}
 	
 	/// Call this method to recalculate the positions of the parallax views.
@@ -193,20 +229,21 @@ public class MMMParallaxViewCoordinator {
 		NSLayoutConstraint.activate(constraints)
 	}
 
-	/// Ideal (not clipped or extended) rect for this view in the coordinate system of the container view.
+	/// Ideal rect (that is not clipped or extended) for this view in the coordinate system of the container view.
 	private func trackingRect(
-		view: MMMParallaxView,
+		descriptor: MMMParallaxView,
 		scrollView: UIScrollView,
-		containerView: UIView
+		containerView: UIView,
+		maxHeight: CGFloat
 	) -> CGRect {
 
-		let options = view.options
+		let options = descriptor.options
 
 		switch options.type {
 
 		case .scrollView(let y):
 			let b = scrollView.bounds
-			let r = CGRect(x: b.origin.x, y: y, width: b.size.width, height: options.height.max)
+			let r = CGRect(x: b.origin.x, y: y, width: b.size.width, height: maxHeight)
 			return scrollView.convert(r, to: containerView)
 
 		case .tableView(let indexPath):
@@ -254,17 +291,17 @@ public class MMMParallaxViewCoordinator {
 		let oldValue = change?.oldValue ?? .zero
 
 		// When there is no change, lets fail silently if the user has set
-		// shouldAdjustContentInset. This fixes an infinite loop issue that occured
+		// shouldAdjustContentInset. This fixes an infinite loop issue that occurred
 		// sometimes on iPhone SE. However, this can get called with .zero and .zero
 		// multiple times while AutoLayout is setting up the view. We basically need
 		// the 'last' change event to setup the views properly, this is really hard
 		// to detect.
 		//
 		// When the view isn't properly calculated when using shouldAdjustContentInset
-		// you're able to call `.recalculate()` on the coordinator after Autolayout
+		// you're able to call `.recalculate()` on the coordinator after Auto Layout
 		// finishes (e.g. in viewDidLayoutSubviews).
 		
-		// On recalulation always check for change.
+		// On recalculation always check for change.
 		let recalculation = change == nil
 		
 		// Only check for change when shouldAdjustContentInset is false.
@@ -287,20 +324,18 @@ public class MMMParallaxViewCoordinator {
 			from: scrollView
 		)
 
-		// A "viewport" is the part of the container where all sticky views
-		// should stay in. This either matches the safe area or when stickToSafeAreaInsets
-		// is set to false it uses the raw edges.
-		let viewportRect = stickToSafeAreaInsets ?
-			containerView.bounds.inset(by: containerView.safeAreaInsets) :
-			containerView.bounds
+		// A "viewport" is the part of the container where all sticky views should stay in.
+		// This either matches the safe area or bounds (when `stickToSafeAreaInsets` is `false`).
+		let viewportRect = stickToSafeAreaInsets
+			? containerView.bounds.inset(by: containerView.safeAreaInsets)
+			: containerView.bounds
 		
-		// With the current calculations, if not sticking to the safe area, the
-		// calculated height will be too big. We use this to subtract top and
-		// bottom accordingly.
+		// With the current calculations, if not sticking to the safe area, the calculated height will be too big.
+		// We use this to subtract top and bottom accordingly.
 		let safeAreaAdjustment = stickToSafeAreaInsets ? .zero : containerView.safeAreaInsets
 		
-		// These define the top (bottom) part of the viewport that is completely
-		// covered by stick-to-top (stick-to-bottom) views without gaps between.
+		// These define the top (bottom) part of the viewport that is completely covered by stick-to-top
+		// (stick-to-bottom) views without gaps in-between.
 		//           ┌──────────────┐
 		//  viewport╔╬══════════════╬╗
 		//          ║│              │║
@@ -308,13 +343,12 @@ public class MMMParallaxViewCoordinator {
 		//      top─▶└──────────────┘║
 		//          ║                ║
 		//          ╚      ...       ╝
-		// We begin with the viewport's top/bottom and then update these when we
-		// see views sticking out.
+		// We begin with the viewport's top/bottom and then update these when we see views sticking out.
 		var top = viewportRect.minY
 		var bottom = viewportRect.maxY
 		
-		// These are similar to top/bottom but describe adjustmenets in
-		// `contentInsets` that we might need to make (if were instructed to do so).
+		// These are similar to top/bottom but describe adjustments in `contentInsets` that we might need to make
+		// (if we were instructed to do so).
 		var topInset = top
 		var bottomInset = bottom
 
@@ -326,22 +360,22 @@ public class MMMParallaxViewCoordinator {
 			// views with both sticky flags are involved.
 			for storage in _parallaxViews {
 				
-				guard let view = storage.view else {
+				guard let descriptor = storage.descriptor else {
 					// If we don't have a view to work with, skip.
 					continue
 				}
-				
+
+				let minHeight = storage.minHeight(width: viewportRect.width, verticalFittingPriority: heightConstraintPriority)
+				let maxHeight = storage.maxHeight(width: viewportRect.width)
+
 				// The rect where the view ideally should sit, container's coordinates.
 				// (We don't care about left/right sides of this rect for now.)
-				var r = self.trackingRect(view: view, scrollView: scrollView, containerView: containerView)
+				var r = self.trackingRect(descriptor: descriptor, scrollView: scrollView, containerView: containerView, maxHeight: maxHeight)
 
-				let minHeight = view.options.height.min
+				let shouldStickToTop = descriptor.options.stickPosition.contains(.top)
+				let shouldStickToBottom = descriptor.options.stickPosition.contains(.bottom)
 				
-				let shouldStickToTop = view.options.stickPosition.contains(.top)
-				let shouldStickToBottom = view.options.stickPosition.contains(.bottom)
-				
-				// If it should stick to the top, then we cannot allow it to go
-				// somewhere above the viewport.
+				// If it should stick to the top, then we cannot allow it to go somewhere above the viewport.
 				if shouldStickToTop {
 
 					let prevTop = top
@@ -357,13 +391,11 @@ public class MMMParallaxViewCoordinator {
 						top = r.maxY + safeAreaAdjustment.top
 					}
 
-					// We've just (possibly) updated `top`, so let's review the
-					// corresponding inset.
+					// We've just (possibly) updated `top`, so let's review the corresponding inset.
 					//
-					// When the view slides into its topmost position in the container,
-					// then the insets of the scroll view (if we have to adjust them)
-					// should be below that view (to keep section headers of the
-					// table view out of the way, for example).
+					// When the view slides into its topmost position in the container, then the insets of
+					// the scroll view (if we have to adjust them) should be below that view (to keep section
+					// headers of the table view out of the way, for example).
 					//
 					//            ┌──────────────┐
 					//   viewport╔╬══════════════╬╗
@@ -374,9 +406,8 @@ public class MMMParallaxViewCoordinator {
 					//           ║      ...       ║
 					//           ╚                ╝
 					//
-					// We could calculate this inset in advance using min height of
-					// the view, but this would create unwanted extra space when the
-					// user scrolls up.
+					// We could calculate this inset in advance using min height of the view, but this would
+					// create unwanted extra space when the user scrolls up.
 					//
 					//   viewport╔════════════════╗
 					//           ║ unwanted space ║
@@ -386,16 +417,14 @@ public class MMMParallaxViewCoordinator {
 					//           ║└──────────────┘║
 					//           ╚      ...       ╝
 					//
-					// Thus we are trying to animate the top inset here from 0 to
-					// view's min height while it slides into the place. We could
-					// be using the change of height from max to min as our cue
-					// (time), but this would not work with views preferring to
-					// stay the same.
+					// Thus we are trying to animate the top inset here from 0 to view's min height while it
+					// slides into the place. We could be using the change of height from max to min as our cue
+					// (time), but this would not work with views preferring to stay the same.
 					//
-					// So instead let's use the distance from the final position
-					// measured relative to min height part. (This is limited by
-					// the distance the view can potentially move relative to the
-					// viewport.)
+					// So instead let's use the distance from the final position measured relative to min
+					// height part. (This is limited by the distance the view can potentially move relative
+					// to the viewport.)
+					//
 					//             ╔╦──────────────╦╗
 					//            ▶║└──────────────┘║
 					//    distance│║                ║
@@ -425,7 +454,7 @@ public class MMMParallaxViewCoordinator {
 					let prevBottom = bottom
 					if r.maxY > bottom {
 						let rawHeight = bottom - r.minY - safeAreaAdjustment.bottom
-						r.size.height = max(rawHeight, view.options.height.min)
+						r.size.height = max(rawHeight, minHeight)
 						r.origin.y = bottom - r.size.height
 						bottom = r.minY
 					} else if stretchBottomViewWhenBouncing && r.maxY >= contentRect.maxY {
@@ -478,23 +507,24 @@ public class MMMParallaxViewCoordinator {
 					didChange = true
 					// TODO: Remove on next release.
 					let direction: MMMParallaxScrollEvent.Direction = oldValue.y > newValue.y ? .up : .down
-					view.scrollChanged(self, event: .init(progress: topProgress, direction: direction))
+					descriptor.scrollChanged(self, event: .init(progress: topProgress, direction: direction))
 				}
 
 				// TODO: do we need the old value? Could be shorter without it.
 				// TODO: do we need this event at all?
 				// TODO: - remove oldValue since it's not used in the new callback.
 				let heightProgress: CGFloat = {
-					if view.options.height.max > minHeight {
+					if maxHeight > minHeight {
 						return map(
 							value: r.size.height,
-							fromStart: minHeight, fromStop: view.options.height.max,
+							fromStart: minHeight, fromStop: maxHeight,
 							toStart: 0, toStop: 1,
 							clampStart: true,
 							clampStop: false
 						)
+					} else {
+						return 1
 					}
-					return 1
 				}()
 				
 				let oldHeight = heightConstraint.constant
@@ -516,7 +546,7 @@ public class MMMParallaxViewCoordinator {
 					
 					// TODO: Remove on next release.
 					let event = MMMParallaxHeightEvent(progress: heightProgress, from: oldHeight, to: newHeight)
-					view.heightChanged(self, event: event)
+					descriptor.heightChanged(self, event: event)
 				}
 				
 				if didChange {
@@ -526,7 +556,7 @@ public class MMMParallaxViewCoordinator {
 						topProgress: topProgress
 					)
 					
-					view.viewUpdated(self, event: event)
+					descriptor.viewUpdated(self, event: event)
 				}
 			}
 		}
@@ -534,7 +564,7 @@ public class MMMParallaxViewCoordinator {
 		// Sizes and positions of the views might depend on the scroll view insets,
 		// so let's update them first (if we are supposed to do so).
 		
-		// So `topInset` and `bottomtopInset` define "safe" parts of the view relative to the container,
+		// So `topContentInset` and `bottomContentInset` define "safe" parts of the view relative to the container,
 		// need to figure out how these "safe" parts would overlap the scroll view.
 
 		// The safe area insets of the scroll view will be included into the final insets (`adjustedContentInset`),
@@ -554,4 +584,37 @@ public class MMMParallaxViewCoordinator {
 			scrollView.contentInset = inset
 		}
 	}
+
+	/// Descriptor of a parallax view that is following a cell with the given index path, if any.
+	public func viewForRowAt(indexPath: IndexPath) -> MMMParallaxView? {
+		// TODO: perhaps moving followIndex from the extension would make it more readable here
+		return parallaxViews.first { $0.options.followIndex == indexPath }
+	}
+
+	/// Returns the maxHeight for a certain IndexPath, useful for the TableView's heightForRowAt.. dataSource method
+	/// - Parameter indexPath: The indexPath the parallaxView is following
+	public func heightForRowAt(indexPath: IndexPath) -> CGFloat {
+
+		guard let info = _parallaxViews.first(where: { $0.descriptor?.options.followIndex == indexPath }) else {
+			return UITableView.automaticDimension
+		}
+
+		guard let containerView = self.containerView else {
+			assertionFailure("Cannot use \(#function) when the container view has gone or was not set")
+			return UITableView.automaticDimension
+		}
+
+		return info.maxHeight(width: containerView.bounds.size.width)
+	}
+
+	// TODO: clarify this
+	/// hitTest helper method, call super.hitTest and pass that view here. Override this in your viewController / container when
+	/// not using the wrapper.
+	/// - Parameter view: The view supplied by super.hitTest(...)
+	public func hitTest(for view: UIView?) -> UIView? {
+		guard case let parallaxView as MMMParallaxView = view else { return view }
+
+		return parallaxView.options.forwardsTouches ? scrollView : view
+	}
+
 }

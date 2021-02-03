@@ -14,11 +14,7 @@ class TableViewController: UIViewController {
 			height: .init(min: 120, max: 220),
 			type: .tableView(indexPath: IndexPath(row: 0, section: 0))
 		)
-		
-		var id: ObjectIdentifier {
-			return ObjectIdentifier(self)
-		}
-		
+
 		public init() {
 
 			super.init(frame: .zero)
@@ -51,7 +47,8 @@ class TableViewController: UIViewController {
 			
 			NSLayoutConstraint.activate(
 				NSLayoutConstraint.constraints(
-					withVisualFormat: "V:|-(>=0,20@749)-[top(>=0)]-(>=0,20@749)-[bottom(20@749)]-(>=0,20@749)-|",
+					// Using prio 749 constraints allows the view to become smaller when that's needed.
+					withVisualFormat: "V:|-(20)-[top(>=20@749)]-(>=0,20@749)-[bottom(20@752)]-(20)-|",
 					options: [], metrics: [:], views: views
 				)
 			)
@@ -76,12 +73,35 @@ class TableViewController: UIViewController {
 	let tableView = UITableView(frame: .zero, style: .plain)
 	let refreshControl = UIRefreshControl()
 	let header = Sticky()
-	let center = Sticky()
 	let footer = Sticky()
+
+	private lazy var center: UIView = {
+		let center = UIView()
+		center.translatesAutoresizingMaskIntoConstraints = false
+		center.backgroundColor = .init(red: 0.0, green: 1.0, blue: 0.0, alpha: 0.5)
+		return center
+	}()
+
+	// This is to show that the views being managed do not have to support certain protocol.
+	// The desired behavior can be described separately.
+	private lazy var centerDescriptor = MMMParallaxViewDescriptor(
+		view: center,
+		options: MMMParallaxViewOptions(
+			height: .init(min: 20, max: 40),
+			type: .tableView(indexPath: .init(row: 5, section: 3)),
+			forwardsTouches: true,
+			stickPosition: .top
+		),
+		onDidUpdate: { p in
+			// And we can do something with the view from the outside without overriding anything there.
+			self.center.alpha = p.topProgress
+		}
+	)
 	
 	let coordinator = MMMParallaxViewCoordinator()
 	
 	override func loadView() {
+
 		let view = View()
 		view.coordinator = coordinator
 		
@@ -89,6 +109,7 @@ class TableViewController: UIViewController {
 	}
 	
 	override func viewDidLoad() {
+
 		super.viewDidLoad()
 		
 		title = "Test"
@@ -117,15 +138,9 @@ class TableViewController: UIViewController {
 		
 		header.alpha = 0.5
 
-		center.backgroundColor = .init(red: 0.0, green: 1.0, blue: 0.0, alpha: 0.5)
-		center.options.type = .tableView(indexPath: IndexPath(row: 5, section: 3))
-		center.options.height = .init(min: 20, max: 40)
-		// TODO: set to .both to see the issue with ordering that requires views to be sorted either by the user or automatically
-		center.options.stickPosition = .top
-
 		footer.backgroundColor = .blue
 		footer.options.type = .tableView(indexPath: IndexPath(row: 0, section: 5))
-		footer.options.height = .init(min: 44, max: 120)
+		footer.options.height = .dynamic
 		footer.options.stickPosition = .bottom
 
 		tableView.delegate = self
@@ -136,9 +151,11 @@ class TableViewController: UIViewController {
 		coordinator.stretchTopViewWhenBouncing = false
 		// However it's fine to stretch the bottom view.
 		coordinator.stretchBottomViewWhenBouncing = true
-		coordinator.heightConstraintPriority = .required
+		// This is the default value anyway, but let's test it here.
+		// The constraints in our stickies with prio less than 751 will be beaten when the view needs to be compressed.
+		coordinator.heightConstraintPriority = .defaultHigh + 1
 		coordinator.scrollView = tableView
-		coordinator.parallaxViews = [header, center, footer]
+		coordinator.parallaxViews = [ header, centerDescriptor, footer ]
 		coordinator.containerView = self.view
 		coordinator.shouldAdjustContentInset = true // to make sure the section titles are sticking below the header
 	}
