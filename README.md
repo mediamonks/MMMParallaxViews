@@ -7,7 +7,7 @@ position.
 
 A picture says more than a thousand words;
 
-![ParallaxViews - not working until merge; checkout the .gif in the repo](./ParallaxViews.gif)
+![ParallaxViews - not working until merge; checkout the .gif in the repo](https://github.com/mediamonks/MMMParallaxViews/raw/main/MMMParallaxViews.gif)
 
 ## Example
 
