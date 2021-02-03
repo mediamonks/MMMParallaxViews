@@ -7,7 +7,8 @@ import UIKit
 
 public class MMMParallaxViewCoordinator {
 
-	private class ParallaxViewStorage {
+	/// A record with extra info we keep for each parallax view being managed.
+	private class ParallaxViewRecord {
 
 		public private(set) weak var descriptor: MMMParallaxView?
 
@@ -81,13 +82,13 @@ public class MMMParallaxViewCoordinator {
 		}
 	}
 
-	/// `true` if the receiver should adjust `contentInsets` of the table or scroll view to compensate
+	/// `true` if the receiver should adjust `contentInset` of the table or scroll view to compensate
 	/// for the views sticking to the top or bottom. `false` by default.
 	///
 	/// Let say your `UITableView` has section titles and a "parallax view" sticking to the top.
 	/// By default the titles are going to appear behind the parallax view because the table view is unaware
 	/// of the parallax view overlapping it. When this flag is set to `true` however, the the coordinator
-	/// is going to adjust `contentInsets` so the titles will stick to the bottom of the parallax view.
+	/// is going to adjust `contentInset` so the titles will stick to the bottom of the parallax view.
 	///
 	/// If you are adjusting `contentInsets` yourself, then you might want to take `topContentInset`
 	/// and `bottomContentInset` into account.
@@ -124,13 +125,13 @@ public class MMMParallaxViewCoordinator {
 	/// (`true` by default.)
 	public var stickToSafeAreaInsets: Bool = true
 	
-	private var _parallaxViews: [ParallaxViewStorage] = []
+	private var _parallaxViews: [ParallaxViewRecord] = []
 
 	/// The "parallax views" that should be managed by the coordinator.
 	public var parallaxViews: [MMMParallaxView] {
 		set {
 			_parallaxViews.forEach { $0.view?.removeFromSuperview() }
-			_parallaxViews = newValue.map { ParallaxViewStorage($0) }
+			_parallaxViews = newValue.map { ParallaxViewRecord($0) }
 			setUpViews()
 		}
 		get {
@@ -151,6 +152,7 @@ public class MMMParallaxViewCoordinator {
 		self.scrollView = scrollView
 		self.containerView = containerView
 		self.parallaxViews = parallaxViews
+		setUpListener()
 	}
 	
 	deinit {
@@ -182,6 +184,7 @@ public class MMMParallaxViewCoordinator {
 	}
 	
 	private func setUpViews() {
+
 		// weak refs, fail silently if not found
 		guard let container = containerView else { return }
 		
@@ -198,7 +201,7 @@ public class MMMParallaxViewCoordinator {
 			}
 			
 			if storage.topConstraint != nil, storage.heightConstraint != nil {
-				// View already setup w. constraints.
+				// View already set up w. constraints.
 				return nil
 			}
 			
@@ -616,5 +619,4 @@ public class MMMParallaxViewCoordinator {
 
 		return parallaxView.options.forwardsTouches ? scrollView : view
 	}
-
 }
