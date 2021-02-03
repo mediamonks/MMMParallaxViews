@@ -7,17 +7,24 @@ import UIKit
 
 public struct MMMParallaxViewOptions {
 
-	public struct Height {
-	
-		/// The minimum height the view should animate to
-		public let min: CGFloat
+	public enum Height {
 
-		/// The maximum, or default, height of the view.
-		public let max: CGFloat
-		
+		/// Instructs to use fixed minimum and maximum heights known in advance.
+		case fixed(min: CGFloat, max: CGFloat)
+
+		/// Instructs to use Auto Layout when determining the minimum and the maximum height of the view.
+		///
+		/// It is going to use `systemLayoutSizeFitting(_:withHorizontalFittingPriority:verticalFittingPriority:)`
+		/// where:
+		///  - `(<container's width>, 0)` is the target size;
+		///  - the horizontal fitting priority is always `.required`;
+		///  - the vertical fitting priority is the same as `heightConstraintPriority` of the coordinator
+		///    when determining the minimum size; or `.fittingSizeLevel` when determining the maximum one.
+		case dynamic
+
 		/// Calculate the height of the view automatically by autoLayout, gets the minimum height by calculating using
 		/// priority `required - 1`, the maximum height by using priority `fittingSizeLevel`.
-		public static func automatic(with view: MMMParallaxView) -> Height {
+		public static func automatic(with view: UIView) -> Height {
 			let min = view.systemLayoutSizeFitting(
 				.zero,
 				withHorizontalFittingPriority: .fittingSizeLevel,
@@ -35,8 +42,7 @@ public struct MMMParallaxViewOptions {
 		
 		public init(min: CGFloat, max: CGFloat) {
 			assert(min <= max)
-			self.min = min
-			self.max = max
+			self = .fixed(min: min, max: max)
 		}
 	}
 	
@@ -80,13 +86,11 @@ public struct MMMParallaxViewOptions {
 	/// Defaults to true.
 	public var forwardsTouches: Bool = true
 
-	// TODO: not on sticky behaviour when bouncing
+	// TODO: note on sticky behaviour when bouncing
 	/// The place on screen where the view will stick to (top, bottom), when using .none, the resizing functionality
 	/// is not supported.
 	/// Defaults to .both.
 	public var stickPosition: StickPosition = .both
-	
-	private weak var parent: MMMParallaxView?
 	
 	public init(height: Height, type: TrackingType) {
 		self.height = height
