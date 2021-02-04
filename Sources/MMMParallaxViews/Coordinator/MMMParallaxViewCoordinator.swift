@@ -605,20 +605,39 @@ public class MMMParallaxViewCoordinator {
 		return parallaxViews.first { $0.options.followIndex == indexPath }
 	}
 
-	/// Returns the maxHeight for a certain IndexPath, useful for the TableView's heightForRowAt.. dataSource method
-	/// - Parameter indexPath: The indexPath the parallaxView is following
+	/// The height of a proxy cell in your table view to match the maximum height of a parallax view
+	/// corresponding to the given index path; or `UITableView.automaticDimension`, if there is no parallax
+	/// view following a cell with the given index path.
+	///
+	/// You can use this in your table view delegate to make sure that the size of the proxy cell that
+	/// the parallax view is going to follow matches the maximum height of the view according to its settings.
 	public func heightForRowAt(indexPath: IndexPath) -> CGFloat {
-
-		guard let info = _parallaxViews.first(where: { $0.descriptor?.options.followIndex == indexPath }) else {
+		guard let record = _parallaxViews.first(where: { $0.descriptor?.options.followIndex == indexPath }) else {
 			return UITableView.automaticDimension
 		}
-
 		guard let containerView = self.containerView else {
 			assertionFailure("Cannot use \(#function) when the container view has gone or was not set")
 			return UITableView.automaticDimension
 		}
+		return record.maxHeight(width: containerView.bounds.size.width)
+	}
 
-		return info.maxHeight(width: containerView.bounds.size.width)
+	/// The height for a proxy cell in your table view or a proxy view in your scroll view to match the maximum
+	/// height of the parallax view corresponding to the given descriptor.
+	///
+	/// (This is the version of `heightForRowAt(indexPath:)` that works with scroll views as well.)
+	///
+	/// Note that the height is not static for the parallax views using dynamic sizing.
+	public func maxHeightForView(_ descriptor: MMMParallaxView) -> CGFloat {
+		guard let record = _parallaxViews.first(where: { $0.descriptor === descriptor }) else {
+			assertionFailure("\(#function) only works with descriptors/views in its `parallaxViews` property")
+			return 0
+		}
+		guard let containerView = self.containerView else {
+			assertionFailure("Cannot use \(#function) when the container view has gone or was not set")
+			return 0
+		}
+		return record.maxHeight(width: containerView.bounds.size.width)
 	}
 
 	// TODO: clarify this
