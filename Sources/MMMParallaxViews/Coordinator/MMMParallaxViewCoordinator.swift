@@ -13,6 +13,10 @@ public class MMMParallaxViewCoordinator {
 		public private(set) weak var descriptor: MMMParallaxView?
 
 		public private(set) weak var view: UIView?
+
+		/// `true`, if the view was added into the container by us.
+		/// This is to not accidentally remove views added by the user code.
+		public var hasAddedView: Bool = false
 		
 		public var topConstraint: NSLayoutConstraint?
 		public var heightConstraint: NSLayoutConstraint?
@@ -130,7 +134,13 @@ public class MMMParallaxViewCoordinator {
 	/// The "parallax views" that should be managed by the coordinator.
 	public var parallaxViews: [MMMParallaxView] {
 		set {
-			_parallaxViews.forEach { $0.view?.removeFromSuperview() }
+			_parallaxViews.forEach { record in
+				record.heightConstraint?.isActive = false
+				record.topConstraint?.isActive = false
+				if record.hasAddedView {
+					record.view?.removeFromSuperview()
+				}
+			}
 			_parallaxViews = newValue.map { ParallaxViewRecord($0) }
 			setUpViews()
 		}
@@ -188,9 +198,9 @@ public class MMMParallaxViewCoordinator {
 		// weak refs, fail silently if not found
 		guard let container = containerView else { return }
 		
-		let constraints = _parallaxViews.compactMap({ storage -> [NSLayoutConstraint]? in
+		let constraints = _parallaxViews.compactMap({ record -> [NSLayoutConstraint]? in
 			
-			guard let view = storage.view else {
+			guard let view = record.view else {
 				return nil
 			}
 			
@@ -198,9 +208,10 @@ public class MMMParallaxViewCoordinator {
 			
 			if !container.subviews.contains(view) {
 				container.addSubview(view)
+				record.hasAddedView = true
 			}
 			
-			if storage.topConstraint != nil, storage.heightConstraint != nil {
+			if record.topConstraint != nil, record.heightConstraint != nil {
 				// View already set up w. constraints.
 				return nil
 			}
@@ -215,8 +226,8 @@ public class MMMParallaxViewCoordinator {
 				multiplier: 1.0, constant: 0)
 			heightConstraint.priority = heightConstraintPriority
 			
-			storage.topConstraint = topConstraint
-			storage.heightConstraint = heightConstraint
+			record.topConstraint = topConstraint
+			record.heightConstraint = heightConstraint
 			
 			let horizontalConstraints = NSLayoutConstraint.constraints(
 				withVisualFormat: "H:|[view]|",
