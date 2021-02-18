@@ -96,6 +96,9 @@ public class MMMParallaxViewCoordinator {
 	///
 	/// If you are adjusting `contentInsets` yourself, then you might want to take `topContentInset`
 	/// and `bottomContentInset` into account.
+	///
+	/// - Note: We don't perform updates in `contentInset` when the table view is bouncing because this would
+	/// interfere with the process in case the content view is small enough.
 	public var shouldAdjustContentInset: Bool = false
 
 	public private(set) var topContentInset: CGFloat = 0
@@ -148,9 +151,7 @@ public class MMMParallaxViewCoordinator {
 			return _parallaxViews.compactMap { $0.descriptor }
 		}
 	}
-	
-	private var observer: NSKeyValueObservation?
-	
+
 	public init() {}
 	
 	public convenience init(
@@ -171,18 +172,17 @@ public class MMMParallaxViewCoordinator {
 	
 	/// Call this method to recalculate the positions of the parallax views.
 	public func recalculate() {
-		if let scrollView = scrollView {
-			// Ask for a recalculation by passing change = nil.
-			contentOffsetDidChange(scrollView, change: nil)
-		}
+		_recalculate()
 	}
-	
+
+	private var contentOffsetChangeToken: NSKeyValueObservation?
+
 	private func setUpListener() {
 		// it's a weak ref, so fail silently if not found
 		guard let scrollView = scrollView else { return }
 		
-		observer?.invalidate()
-		observer = scrollView.observe(
+		contentOffsetChangeToken?.invalidate()
+		contentOffsetChangeToken = scrollView.observe(
 			\.contentOffset,
 			options: [.old, .new],
 			changeHandler: contentOffsetDidChange
@@ -190,7 +190,7 @@ public class MMMParallaxViewCoordinator {
 	}
 	
 	private func tearDownListener() {
-		observer?.invalidate()
+		contentOffsetChangeToken?.invalidate()
 	}
 	
 	private func setUpViews() {
@@ -293,42 +293,28 @@ public class MMMParallaxViewCoordinator {
 		
 		return toStart + (toStop - toStart) * t
 	}
-	
-	private func contentOffsetDidChange(
-		_ scrollView: UIScrollView,
-		change: NSKeyValueObservedChange<CGPoint>?
-	) {
 
-		// Offset is observed, if the NSKeyValueObservedChange is nil, we ask for a
-		// plain recalculation of the
-		let newValue = change?.newValue ?? .zero
-		let oldValue = change?.oldValue ?? .zero
+	private func contentOffsetDidChange(_ scrollView: UIScrollView, change: NSKeyValueObservedChange<CGPoint>) {
 
-		// When there is no change, lets fail silently if the user has set
-		// shouldAdjustContentInset. This fixes an infinite loop issue that occurred
-		// sometimes on iPhone SE. However, this can get called with .zero and .zero
-		// multiple times while AutoLayout is setting up the view. We basically need
-		// the 'last' change event to setup the views properly, this is really hard
-		// to detect.
-		//
-		// When the view isn't properly calculated when using shouldAdjustContentInset
-		// you're able to call `.recalculate()` on the coordinator after Auto Layout
-		// finishes (e.g. in viewDidLayoutSubviews).
-		
-		// On recalculation always check for change.
-		let recalculation = change == nil
-		
-		// Only check for change when shouldAdjustContentInset is false.
-		let isChanged = newValue != oldValue || !shouldAdjustContentInset
-		
-		guard isChanged || recalculation else { return }
-		
-		guard let containerView = self.containerView else {
-			// Feels odd that the container can disappear when scrolling is
-			// reported, but it can actually happen as the scroll view can
-			// change its contentOffset when it's being removed from the superview
-			// as a result of deallocation of the container (which is typically
-			// its parent).
+		guard change.newValue != change.oldValue else {
+			return
+		}
+
+		// TODO: oldValue should be removed on the next breaking update
+		_recalculate(oldValue: change.oldValue ?? .zero)
+	}
+
+	private var skipRecalculateCall: Int = 0
+
+	private func _recalculate(oldValue: CGPoint = .zero) {
+
+		// We want to be able to temporarily disable recalculations when the changes are caused by us.
+		guard skipRecalculateCall == 0 else { return }
+
+		guard let containerView = self.containerView, let scrollView = self.scrollView  else {
+			// It might seem odd that the container can disappear when scrolling is reported,
+			// but it can actually happen: the scroll view can change its `contentOffset` while it's being
+			// removed from the superview due to deallocation of the container (which is typically its parent).
 			return
 		}
 
@@ -366,6 +352,8 @@ public class MMMParallaxViewCoordinator {
 		var topInset = top
 		var bottomInset = bottom
 
+		let contentOffsetY = scrollView.contentOffset.y
+
 		// Let's go through all views and decide where they should be positioned now.
 		do {
 
@@ -384,7 +372,7 @@ public class MMMParallaxViewCoordinator {
 
 				// The rect where the view ideally should sit, container's coordinates.
 				// (We don't care about left/right sides of this rect for now.)
-				var r = self.trackingRect(descriptor: descriptor, scrollView: scrollView, containerView: containerView, maxHeight: maxHeight)
+				var r = trackingRect(descriptor: descriptor, scrollView: scrollView, containerView: containerView, maxHeight: maxHeight)
 
 				let shouldStickToTop = descriptor.options.stickPosition.contains(.top)
 				let shouldStickToBottom = descriptor.options.stickPosition.contains(.bottom)
@@ -520,7 +508,7 @@ public class MMMParallaxViewCoordinator {
 					
 					didChange = true
 					// TODO: Remove on next release.
-					let direction: MMMParallaxScrollEvent.Direction = oldValue.y > newValue.y ? .up : .down
+					let direction: MMMParallaxScrollEvent.Direction = oldValue.y > contentOffsetY ? .up : .down
 					descriptor.scrollChanged(self, event: .init(progress: topProgress, direction: direction))
 				}
 
@@ -574,10 +562,7 @@ public class MMMParallaxViewCoordinator {
 				}
 			}
 		}
-		
-		// Sizes and positions of the views might depend on the scroll view insets,
-		// so let's update them first (if we are supposed to do so).
-		
+
 		// So `topContentInset` and `bottomContentInset` define "safe" parts of the view relative to the container,
 		// need to figure out how these "safe" parts would overlap the scroll view.
 
@@ -587,15 +572,38 @@ public class MMMParallaxViewCoordinator {
 			scrollView.frame.inset(by: scrollView.safeAreaInsets),
 			from: scrollView.superview
 		)
+
 		var inset = scrollView.contentInset
 		inset.top = max(0, (topInset - scrollViewRect.minY).rounded())
 		inset.bottom = max(0, (scrollViewRect.maxY - bottomInset).rounded())
-		
+
 		topContentInset = inset.top
 		bottomContentInset = inset.bottom
 		
 		if shouldAdjustContentInset, scrollView.contentInset != inset {
-			scrollView.contentInset = inset
+
+			// Unfortunately we cannot update content insets on table views when bouncing happens.
+			// When we are trying to do so, then the table view updates its content offset in response and this
+			// prevents bouncing from working correctly.
+			// Fortunately in this case it's also harder to notice that the insets are not updated,
+			// so disabling updates is an acceptable workaround for now.
+			let isBouncing: Bool = {
+				guard scrollView.isDragging || scrollView.isDecelerating else {
+					return false
+				}
+				let contentRect = scrollView.convert(
+					CGRect(origin: .zero, size: scrollView.contentSize),
+					from: scrollView
+				)
+				let viewportRect = scrollView.bounds.inset(by: scrollView.adjustedContentInset)
+				return viewportRect.minY < contentRect.minY || contentRect.maxY < viewportRect.maxY
+			}()
+
+			if !isBouncing {
+				skipRecalculateCall += 1
+				scrollView.contentInset = inset
+				skipRecalculateCall -= 1
+			}
 		}
 	}
 
