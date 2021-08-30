@@ -305,6 +305,7 @@ public class MMMParallaxViewCoordinator {
 	}
 
 	private var skipRecalculateCall: Int = 0
+	private var contentOffsetYToIgnore: CGFloat?
 
 	private func _recalculate(oldValue: CGPoint = .zero) {
 
@@ -579,32 +580,46 @@ public class MMMParallaxViewCoordinator {
 
 		topContentInset = inset.top
 		bottomContentInset = inset.bottom
-		
-		if shouldAdjustContentInset, scrollView.contentInset != inset {
 
-			// Unfortunately we cannot update content insets on table views when bouncing happens.
-			// When we are trying to do so, then the table view updates its content offset in response and this
-			// prevents bouncing from working correctly.
-			// Fortunately in this case it's also harder to notice that the insets are not updated,
-			// so disabling updates is an acceptable workaround for now.
-			let isBouncing: Bool = {
-				guard scrollView.isDragging || scrollView.isDecelerating else {
-					return false
-				}
-				let contentRect = scrollView.convert(
-					CGRect(origin: .zero, size: scrollView.contentSize),
-					from: scrollView
-				)
-				let viewportRect = scrollView.bounds.inset(by: scrollView.adjustedContentInset)
-				return viewportRect.minY < contentRect.minY || contentRect.maxY < viewportRect.maxY
-			}()
-
-			if !isBouncing {
-				skipRecalculateCall += 1
-				scrollView.contentInset = inset
-				skipRecalculateCall -= 1
-			}
+		guard shouldAdjustContentInset, scrollView.contentInset != inset else {
+			// No need to update contentInset, we are done.
+			return
 		}
+
+		// In certain cases (when doing layout or implicit offset animations it seems) a table view
+		// would adjust `contentOffset` in response to our changes in `contentInset` which can cause a loop of
+		// updates eventually resulting in a crash.
+		// Unfortunately we cannot yet easily distinguish when this is happening and thus this silly workaround
+		// where we try to predict how it might compensate `contentOffset` and would ignore the corresponding
+		// offset in this case.
+		guard contentOffsetYToIgnore.map({ abs($0 - contentOffsetY) > 0.01 }) ?? true else {
+			contentOffsetYToIgnore = nil
+			return
+		}
+		contentOffsetYToIgnore = contentOffsetY - inset.top
+
+		// Unfortunately we cannot update content insets on table views when bouncing happens either.
+		// When we are trying to do so, then the table view updates its content offset in response
+		// which prevents bouncing from working correctly. Fortunately it's also harder to notice that the insets
+		// are not updated in this case, so disabling updates is an acceptable workaround for now.
+		let isBouncing: Bool = {
+			guard scrollView.isDragging || scrollView.isDecelerating else {
+				return false
+			}
+			let contentRect = scrollView.convert(
+				CGRect(origin: .zero, size: scrollView.contentSize),
+				from: scrollView
+			)
+			let viewportRect = scrollView.bounds.inset(by: scrollView.adjustedContentInset)
+			return viewportRect.minY < contentRect.minY || contentRect.maxY < viewportRect.maxY
+		}()
+		guard !isBouncing else {
+			return
+		}
+
+		skipRecalculateCall += 1
+		scrollView.contentInset = inset
+		skipRecalculateCall -= 1
 	}
 
 	/// Descriptor of a parallax view that is following a cell with the given index path, if any.

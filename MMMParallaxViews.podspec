@@ -6,7 +6,7 @@
 Pod::Spec.new do |s|
 
 	s.name = "MMMParallaxViews"
-	s.version = "0.8.1"
+	s.version = "0.8.2"
 	s.summary = "Sticky headers/cells/footers with UITableView or UIScrollView"
 	s.description = <<-END
 		The idea of ParallaxViews is to bind to a UIScrollView or UITableView, and track a certain position or cell.
