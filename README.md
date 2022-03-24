@@ -97,3 +97,9 @@ Either install via CocoaPods or Swift Package Manager, like you usually would.
 If you aren't using the `MMMParallaxViewWrapper` and you want to use the `forwardsTouches`
 option, you should override the `hitTest` in your containerView; Have a look at
 the example for an implementation of this.
+
+## Ready for liftoff? 🚀
+
+We're always looking for talent. Join one of the fastest-growing rocket ships in
+the business. Head over to our [careers page](https://media.monks.com/careers)
+for more info!
