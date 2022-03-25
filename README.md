@@ -1,5 +1,7 @@
 #  MMMParallaxViews
 
+[![Build](https://github.com/mediamonks/MMMParallaxViews/workflows/Build/badge.svg)](https://github.com/mediamonks/MMMParallaxViews/actions?query=workflow%3ABuild)
+
 The idea of ParallaxViews is to bind to a `UIScrollView` or `UITableView`, and track
 a certain position or cell. The views will resize according to the scroll position,
 you're able to give a minimum and maximum height for your views, as well as a stick

@@ -1,0 +1,20 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build_ios:
+    name: Build iOS
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Prepare
+        run: gem install xcpretty
+      - name: Build
+        run: xcodebuild build -scheme 'MMMParallaxViews' -destination generic/platform=iOS | xcpretty
