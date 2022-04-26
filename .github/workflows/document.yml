@@ -1,0 +1,47 @@
+name: Document
+
+on:
+  push:
+    tags:
+      - "*"
+
+  workflow_dispatch:
+
+jobs:
+  document:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Wait for build to succeed
+        uses: fountainhead/action-wait-for-check@v1.0.0
+        id: wait-for-build
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Build iOS
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install Sourcekitten
+        if: steps.wait-for-build.outputs.conclusion == 'success'
+        run: brew install sourcekitten
+
+      - name: Install Jazzy
+        run: gem install jazzy
+
+      - name: Install Doc Generator
+        run: |
+          git clone https://github.com/mediamonks/MMMDocGenerator.git
+          cd MMMDocGenerator
+          swift build -c release
+          cd ../
+          cp MMMDocGenerator/.build/release/DocGenerator .
+
+      - name: Generate docs
+        run: ./DocGenerator -p ${{ github.event.repository.name }}
+
+      - name: Publish
+        uses: JamesIves/github-pages-deploy-action@v4.2.5
+        with:
+          branch: gh-pages
+          folder: docs
